@@ -104,7 +104,7 @@
   <link name="left_wheel_steering">
     <inertial>
       <mass value="0.1"/>
-      <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0" />
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001" />
     </inertial>
   </link>
 
@@ -121,7 +121,7 @@
   <link name="right_wheel_steering">
     <inertial>
       <mass value="0.1"/>
-      <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0" />
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001" />
     </inertial>
   </link>
 
