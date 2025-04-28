@@ -77,7 +77,7 @@ public:
 
     for (const auto & individual_hardware_info : hardware_info) {
       std::string robot_hw_sim_type_str_ = individual_hardware_info.hardware_plugin_name;
-      RCLCPP_DEBUG(
+      RCLCPP_INFO(
         logger_, "Load hardware interface %s ...",
         robot_hw_sim_type_str_.c_str());
 
@@ -108,7 +108,7 @@ public:
         components_are_loaded_and_initialized_ = false;
         break;
       }
-      RCLCPP_DEBUG(
+      RCLCPP_INFO(
         logger_, "Initialized robot simulation interface %s!",
         robot_hw_sim_type_str_.c_str());
 
@@ -315,6 +315,7 @@ void GazeboSimROS2ControlPlugin::Configure(
     hold_joints =
       sdfPtr->GetElement("hold_joints")->Get<bool>();
   }
+  //TODO(juliajia): is this the same as p_pos in the parameters file?
   double position_proportional_gain = 0.1;  // default
   if (sdfPtr->HasElement("position_proportional_gain")) {
     position_proportional_gain =
@@ -369,7 +370,7 @@ void GazeboSimROS2ControlPlugin::Configure(
     };
   this->dataPtr->thread_executor_spin_ = std::thread(spin);
 
-  RCLCPP_DEBUG_STREAM(
+  RCLCPP_INFO_STREAM(
     this->dataPtr->node_->get_logger(), "[Gazebo Sim ROS 2 Control] Setting up controller for [" <<
       model.Name(_ecm) << "] (Entity=" << _entity << ")].");
 
@@ -379,12 +380,13 @@ void GazeboSimROS2ControlPlugin::Configure(
     _ecm);
 
   if (enabledJoints.size() == 0) {
-    RCLCPP_DEBUG_STREAM(
+    RCLCPP_INFO_STREAM(
       this->dataPtr->node_->get_logger(),
       "[Gazebo ROS 2 Control] There are no available Joints.");
     return;
   }
 
+  //TODO(juliajia): what is hold_joints?
   try {
     this->dataPtr->node_->declare_parameter("hold_joints", rclcpp::ParameterValue(hold_joints));
   } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & e) {
@@ -404,7 +406,7 @@ void GazeboSimROS2ControlPlugin::Configure(
       this->dataPtr->node_->get_logger(), "Parameter 'hold_joints' value has wrong type, %s",
       e.what());
   }
-
+  //TODO(juliajia): what is position_proportional_gain? if so, should we deprecate it?
   try {
     this->dataPtr->node_->declare_parameter(
       "position_proportional_gain",

@@ -22,6 +22,8 @@
 #include <vector>
 
 #include "gz_ros2_control/gz_system_interface.hpp"
+#include "gz_ros2_control/gz_ros2_control_parameters.hpp"
+#include "rclcpp/executors/single_threaded_executor.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 #include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
 
@@ -88,6 +90,15 @@ private:
 
   /// \brief Private data class
   std::unique_ptr<GazeboSimSystemPrivate> dataPtr;
+
+  // Parameters from ROS for gz_ros2_control
+  std::shared_ptr<gz_ros2_control::ParamListener> param_listener_;
+  gz_ros2_control::Params params_;
+
+  rclcpp::Node::SharedPtr param_node_;
+  std::thread spin_thread_;
+  std::atomic<bool> stop_spin_ = false;
+  rclcpp::executors::SingleThreadedExecutor::SharedPtr exec_;
 };
 
 }  // namespace gz_ros2_control

@@ -1,0 +1,99 @@
+gz_ros2_control:
+
+  joints: {
+    type: string_array,
+    default_value: [],
+    description: "Names of joints used by the controller",
+    validation: {
+      unique<>: null,
+    }
+  }
+  mode:
+    __map_joints:
+      use_cascade_control: {
+        type: bool,
+        default_value: false,
+        description: "Defines if cascade control is ued in position control (outer position based loop and inner velocity based loop with force output)"
+      }
+  gains:
+    __map_joints:
+      p_pos: {
+        type: double,
+        default_value: 0.0,
+        description: "Proportional gain for PID"
+      }
+      i_pos: {
+        type: double,
+        default_value: 0.0,
+        description: "Integral gain for PID"
+      }
+      d_pos: {
+        type: double,
+        default_value: 0.0,
+        description: "Derivative gain for PID"
+      }
+      i_pos_max: {
+        type: double,
+        default_value: 0.0,
+        description: "Upper integral clamp."
+      }
+      i_pos_min: {
+        type: double,
+        default_value: 0.0,
+        description: "Lower integral clamp."
+      }
+      cmd_pos_max: {
+        type: double,
+        default_value: 0.0,
+        description: "Upper command clamp."
+      }
+      cmd_pos_min: {
+        type: double,
+        default_value: 0.0,
+        description: "Lower command clamp."
+      }
+      cmd_pos_forward_gain: {
+        type: double,
+        default_value: 0.0,
+        description: "Forward gain for the command which is added to the result of the PID controller."
+      }
+      p_vel: {
+        type: double,
+        default_value: 0.0,
+        description: "Proportional gain for PID"
+      }
+      i_vel: {
+        type: double,
+        default_value: 0.0,
+        description: "Integral gain for PID"
+      }
+      d_vel: {
+        type: double,
+        default_value: 0.0,
+        description: "Derivative gain for PID"
+      }
+      i_vel_max: {
+        type: double,
+        default_value: 0.0,
+        description: "Upper integral clamp."
+      }
+      i_vel_min: {
+        type: double,
+        default_value: 0.0,
+        description: "Lower integral clamp."
+      }
+      cmd_vel_max: {
+        type: double,
+        default_value: 0.0,
+        description: "Upper command clamp."
+      }
+      cmd_vel_min: {
+        type: double,
+        default_value: 0.0,
+        description: "Lower command clamp."
+      }
+      cmd_vel_forward_gain: {
+        type: double,
+        default_value: 0.0,
+        description: "Forward gain for the command which is added to the result of the PID controller."
+      }

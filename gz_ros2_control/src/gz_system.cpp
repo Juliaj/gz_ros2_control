@@ -48,6 +48,11 @@
 #include <hardware_interface/lexical_casts.hpp>
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
 
+
+// pid pos related
+#include <gz/math/PID.hh>
+#include <normApi.h>
+
 struct jointData
 {
   /// \brief Joint's names.
@@ -85,6 +90,12 @@ struct jointData
 
   /// \brief Control method defined in the URDF for each joint.
   gz_ros2_control::GazeboSimSystemInterface::ControlMethod joint_control_method;
+
+  /// \brief PID for position control
+  gz::math::PID pid_pos;
+
+  /// \brief PID for velocity control
+  gz::math::PID pid_vel;
 };
 
 class ImuData
@@ -174,6 +185,7 @@ bool GazeboSimSystem::initSim(
   this->dataPtr = std::make_unique<GazeboSimSystemPrivate>();
   this->dataPtr->last_update_sim_time_ros_ = rclcpp::Time();
 
+  // nh_ node handle for the ros2 control system
   this->nh_ = model_nh;
   this->dataPtr->ecm = &_ecm;
   this->dataPtr->n_dof_ = hardware_info.joints.size();
@@ -245,6 +257,14 @@ bool GazeboSimSystem::initSim(
     return false;
   }
 
+  //TODO(juliajia): check whether this is correct
+  std::vector<std::string> joint_names;
+  this->param_node_ =
+    rclcpp::Node::make_shared(
+    hardware_info.name,
+    rclcpp::NodeOptions().allow_undeclared_parameters(true));
+  std::vector<rclcpp::Parameter> param_vec;
+
   for (unsigned int j = 0; j < this->dataPtr->n_dof_; j++) {
     auto & joint_info = hardware_info.joints[j];
     std::string joint_name = this->dataPtr->joints_[j].name = joint_info.name;
@@ -287,6 +307,147 @@ bool GazeboSimSystem::initSim(
     {
       _ecm.CreateComponent(simjoint, sim::components::JointTransmittedWrench());
     }
+
+    const auto * jointAxis =
+      this->dataPtr->ecm->Component<gz::sim::components::JointAxis>(
+      this->dataPtr->joints_[
+        j].sim_joint);
+
+    bool use_cascade_control =
+      (hardware_info.joints[j].parameters.find("use_cascade_control") ==
+      hardware_info.joints[j].parameters.end()) ?
+      false :
+      [&]() {
+      if (hardware_info.joints[j].parameters.at("use_cascade_control") == "true" ||
+        hardware_info.joints[j].parameters.at("use_cascade_control") == "True")
+      {
+        return true;
+      } else {
+        return false;
+      }
+    } ();
+
+    param_vec.push_back(
+      rclcpp::Parameter{"mode." + joint_name + ".use_cascade_control",
+        use_cascade_control});
+
+    double upper = jointAxis->Data().Upper();
+    double lower = jointAxis->Data().Lower();
+    double max_velocity = jointAxis->Data().MaxVelocity();
+    double max_effort = jointAxis->Data().Effort();
+
+    double dummy_guess_p_pos = 10 * max_velocity / abs(upper - lower);
+
+    // PID parameters
+    double p_gain_pos =
+      (hardware_info.joints[j].parameters.find(
+        "p_pos") == hardware_info.joints[j].parameters.end()) ?
+      dummy_guess_p_pos :
+      stod(hardware_info.joints[j].parameters.at("p_pos"));
+    double i_gain_pos =
+      (hardware_info.joints[j].parameters.find(
+        "i_pos") == hardware_info.joints[j].parameters.end()) ?
+      0.0 :
+      stod(hardware_info.joints[j].parameters.at("i_pos"));
+    double d_gain_pos =
+      (hardware_info.joints[j].parameters.find(
+        "d_pos") == hardware_info.joints[j].parameters.end()) ?
+      dummy_guess_p_pos / 100.0 :
+      stod(hardware_info.joints[j].parameters.at("d_pos"));
+    // set integral max and min component to 50 percent of the max effort
+    double i_pos_max =
+      (hardware_info.joints[j].parameters.find("i_pos_max") ==
+      hardware_info.joints[j].parameters.end()) ?
+      0.0 :
+      stod(hardware_info.joints[j].parameters.at("i_pos_max"));
+    double i_pos_min =
+      (hardware_info.joints[j].parameters.find("i_pos_min") ==
+      hardware_info.joints[j].parameters.end()) ?
+      0.0 :
+      stod(hardware_info.joints[j].parameters.at("i_pos_min"));
+    double cmd_pos_max =
+      (hardware_info.joints[j].parameters.find("cmd_pos_max") ==
+      hardware_info.joints[j].parameters.end()) ?
+      max_velocity :
+      stod(hardware_info.joints[j].parameters.at("cmd_pos_max"));
+    double cmd_pos_min =
+      (hardware_info.joints[j].parameters.find("cmd_pos_min") ==
+      hardware_info.joints[j].parameters.end()) ?
+      -1.0 * max_velocity :
+      stod(hardware_info.joints[j].parameters.at("cmd_pos_min"));
+    double cmd_pos_forward_gain =
+      (hardware_info.joints[j].parameters.find("cmd_pos_forward_gain") ==
+      hardware_info.joints[j].parameters.end()) ?
+      0.0 :
+      stod(hardware_info.joints[j].parameters.at("cmd_pos_forward_gain"));
+
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".p_pos", p_gain_pos});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".i_pos", i_gain_pos});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".d_pos", d_gain_pos});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".i_pos_max", i_pos_max});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".i_pos_min", i_pos_min});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_pos_max", cmd_pos_max});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_pos_min", cmd_pos_min});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_pos_forward_gain", cmd_pos_forward_gain});
+
+    this->dataPtr->joints_[j].pid_pos.Init(
+      p_gain_pos, i_gain_pos, d_gain_pos, i_pos_max, i_pos_min, cmd_pos_max,
+      cmd_pos_min, cmd_pos_forward_gain);
+
+    double p_gain_vel =
+      (hardware_info.joints[j].parameters.find(
+        "p_vel") == hardware_info.joints[j].parameters.end()) ?
+      dummy_guess_p_pos / 100.0 :
+      stod(hardware_info.joints[j].parameters.at("p_vel"));
+    double i_gain_vel =
+      (hardware_info.joints[j].parameters.find(
+        "i_vel") == hardware_info.joints[j].parameters.end()) ?
+      dummy_guess_p_pos / 1000.0 :
+      stod(hardware_info.joints[j].parameters.at("i_vel"));
+    double d_gain_vel =
+      (hardware_info.joints[j].parameters.find(
+        "d_vel") == hardware_info.joints[j].parameters.end()) ?
+      0.0 :
+      stod(hardware_info.joints[j].parameters.at("d_vel"));
+    // set integral max and min component to 50 percent of the max effort
+    double i_vel_max =
+      (hardware_info.joints[j].parameters.find("i_vel_max") ==
+      hardware_info.joints[j].parameters.end()) ?
+      max_effort / 2.0 :
+      stod(hardware_info.joints[j].parameters.at("i_vel_max"));
+    double i_vel_min =
+      (hardware_info.joints[j].parameters.find("i_vel_min") ==
+      hardware_info.joints[j].parameters.end()) ?
+      -1.0 * max_effort / 2.0 :
+      stod(hardware_info.joints[j].parameters.at("i_vel_min"));
+    double cmd_vel_max =
+      (hardware_info.joints[j].parameters.find("cmd_vel_max") ==
+      hardware_info.joints[j].parameters.end()) ?
+      max_velocity :
+      stod(hardware_info.joints[j].parameters.at("cmd_vel_max"));
+    double cmd_vel_min =
+      (hardware_info.joints[j].parameters.find("cmd_vel_min") ==
+      hardware_info.joints[j].parameters.end()) ?
+      -1.0 * max_velocity :
+      stod(hardware_info.joints[j].parameters.at("cmd_vel_min"));
+    double cmd_vel_forward_gain =
+      (hardware_info.joints[j].parameters.find("cmd_vel_forward_gain") ==
+      hardware_info.joints[j].parameters.end()) ?
+      0.0 :
+      stod(hardware_info.joints[j].parameters.at("cmd_vel_forward_gain"));
+
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".p_vel", p_gain_vel});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".i_vel", i_gain_vel});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".d_vel", d_gain_vel});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".i_vel_max", i_vel_max});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".i_vel_min", i_vel_min});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_vel_max", cmd_vel_max});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_vel_min", cmd_vel_min});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_vel_forward_gain", cmd_vel_forward_gain});
+
+    this->dataPtr->joints_[j].pid_vel.Init(
+      p_gain_vel, i_gain_vel, d_gain_vel, i_vel_max, i_vel_min, cmd_vel_max,
+      cmd_vel_min, cmd_vel_forward_gain);
 
     // Accept this joint and continue configuration
     RCLCPP_INFO_STREAM(this->nh_->get_logger(), "Loading joint: " << joint_name);
@@ -414,7 +575,44 @@ bool GazeboSimSystem::initSim(
 
     // check if joint is actuated (has command interfaces) or passive
     this->dataPtr->joints_[j].is_actuated = (joint_info.command_interfaces.size() > 0);
+    RCLCPP_INFO_STREAM(this->nh_->get_logger(), "Joint " << joint_name << " is actuated: " << this->dataPtr->joints_[j].is_actuated);
   }
+
+  // register the joint names parameter
+  rclcpp::Parameter joint_names_parameter("joints", joint_names);
+  if (!this->param_node_->has_parameter("joints")) {
+    this->param_node_->set_parameter(joint_names_parameter);
+  }
+  for (const auto & p : param_vec) {
+    if (!this->param_node_->has_parameter(p.get_name())) {
+      this->param_node_->set_parameter(p);
+    }
+  }
+
+  spin_thread_ = std::thread(
+    [this]() {
+      exec_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+      exec_->add_node(this->param_node_);
+
+      while (rclcpp::ok() && !stop_spin_) {
+        exec_->spin_once();
+      }
+      exec_->remove_node(this->param_node_);
+      exec_.reset();
+    });
+
+  try {
+    // Create the parameter listener and get the parameters
+    param_listener_ = std::make_shared<ParamListener>(this->param_node_);
+    params_ = param_listener_->get_params();
+  } catch (const std::exception & e) {
+    fprintf(stderr, "Exception thrown during init stage with message: %s \n", e.what());
+    return false;
+  }
+
+  // update the params
+  param_vec.push_back(joint_names_parameter);
+  param_listener_->update(param_vec);
 
   registerSensors(hardware_info);
 
@@ -545,6 +743,9 @@ CallbackReturn GazeboSimSystem::on_activate(const rclcpp_lifecycle::State & prev
 
 CallbackReturn GazeboSimSystem::on_deactivate(const rclcpp_lifecycle::State & previous_state)
 {
+  //TODO(juliajia): check whether this is correct
+  stop_spin_ = true;
+  spin_thread_.join();
   return CallbackReturn::SUCCESS;
   return hardware_interface::SystemInterface::on_deactivate(previous_state);
 }
@@ -615,8 +816,8 @@ GazeboSimSystem::perform_command_mode_switch(
   const std::vector<std::string> & stop_interfaces)
 {
   for (unsigned int j = 0; j < this->dataPtr->joints_.size(); j++) {
+    // Clear joint control method bits corresponding to stop interfaces
     for (const std::string & interface_name : stop_interfaces) {
-      // Clear joint control method bits corresponding to stop interfaces
       if (interface_name == (this->dataPtr->joints_[j].name + "/" +
         hardware_interface::HW_IF_POSITION))
       {
@@ -658,46 +859,161 @@ GazeboSimSystem::perform_command_mode_switch(
 
 hardware_interface::return_type GazeboSimSystem::write(
   const rclcpp::Time & /*time*/,
-  const rclcpp::Duration & /*period*/)
+  const rclcpp::Duration & period)
 {
+
+  // refresh params
+  param_listener_->refresh_dynamic_parameters();
+  params_ = param_listener_->get_params();
+
   for (unsigned int i = 0; i < this->dataPtr->joints_.size(); ++i) {
     if (this->dataPtr->joints_[i].sim_joint == sim::kNullEntity) {
       continue;
     }
 
+    // assuming every joint has axis
+    const auto * jointAxis =
+      this->dataPtr->ecm->Component<gz::sim::components::JointAxis>(
+      this->dataPtr->joints_[
+        i].sim_joint);
+
+    // update PIDs
+    this->dataPtr->joints_[i].pid_pos.SetPGain(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].p_pos);
+    this->dataPtr->joints_[i].pid_pos.SetIGain(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].i_pos);
+    this->dataPtr->joints_[i].pid_pos.SetDGain(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].d_pos);
+    this->dataPtr->joints_[i].pid_pos.SetIMax(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].i_pos_max);
+    this->dataPtr->joints_[i].pid_pos.SetIMin(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].i_pos_min);
+    this->dataPtr->joints_[i].pid_pos.SetCmdMax(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].cmd_pos_max);
+    this->dataPtr->joints_[i].pid_pos.SetCmdMin(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].cmd_pos_min);
+    this->dataPtr->joints_[i].pid_pos.SetCmdOffset(
+      params_.gains.joints_map[this->dataPtr->joints_[i].name].cmd_pos_forward_gain);
+
+    this->dataPtr->joints_[i].pid_vel.SetPGain(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].p_vel);
+    this->dataPtr->joints_[i].pid_vel.SetIGain(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].i_vel);
+    this->dataPtr->joints_[i].pid_vel.SetDGain(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].d_vel);
+    this->dataPtr->joints_[i].pid_vel.SetIMax(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].i_vel_max);
+    this->dataPtr->joints_[i].pid_vel.SetIMin(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].i_vel_min);
+    this->dataPtr->joints_[i].pid_vel.SetCmdMax(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].cmd_vel_max);
+    this->dataPtr->joints_[i].pid_vel.SetCmdMin(
+      params_.gains.joints_map[this->dataPtr->joints_[i].
+      name].cmd_vel_min);
+    this->dataPtr->joints_[i].pid_vel.SetCmdOffset(
+      params_.gains.joints_map[this->dataPtr->joints_[i].name].cmd_vel_forward_gain);
+
     if (this->dataPtr->joints_[i].joint_control_method & VELOCITY) {
-      if (!this->dataPtr->ecm->Component<sim::components::JointVelocityCmd>(
-          this->dataPtr->joints_[i].sim_joint))
-      {
-        this->dataPtr->ecm->CreateComponent(
-          this->dataPtr->joints_[i].sim_joint,
-          sim::components::JointVelocityCmd({0}));
-      } else {
-        const auto jointVelCmd =
-          this->dataPtr->ecm->Component<sim::components::JointVelocityCmd>(
-          this->dataPtr->joints_[i].sim_joint);
-        *jointVelCmd = sim::components::JointVelocityCmd(
-          {this->dataPtr->joints_[i].joint_velocity_cmd});
-      }
-    } else if (this->dataPtr->joints_[i].joint_control_method & POSITION) {
-      // Get error in position
-      double error;
-      error = (this->dataPtr->joints_[i].joint_position -
-        this->dataPtr->joints_[i].joint_position_cmd) * this->dataPtr->update_rate;
 
-      // Calculate target velcity
-      double target_vel = -this->dataPtr->position_proportional_gain_ * error;
+      double velocity = this->dataPtr->joints_[i].joint_velocity;
+      double velocity_cmd_clamped = std::clamp(
+        this->dataPtr->joints_[i].joint_velocity_cmd,
+        -1.0 * jointAxis->Data().MaxVelocity(), jointAxis->Data().MaxVelocity());
 
-      auto vel =
-        this->dataPtr->ecm->Component<sim::components::JointVelocityCmd>(
+      double velocity_error = velocity - velocity_cmd_clamped;
+
+      // calculate target force/torque - output of inner pid
+      double target_force = this->dataPtr->joints_[i].pid_vel.Update(
+        velocity_error,
+        std::chrono::duration<double>(period.to_chrono<std::chrono::nanoseconds>()));
+
+      // remember for potential effort state interface
+      this->dataPtr->joints_[i].joint_effort_cmd = target_force;
+
+      auto forceCmd = this->dataPtr->ecm->Component<sim::components::JointForceCmd>(
         this->dataPtr->joints_[i].sim_joint);
 
-      if (vel == nullptr) {
+      if (forceCmd == nullptr) {
         this->dataPtr->ecm->CreateComponent(
           this->dataPtr->joints_[i].sim_joint,
-          sim::components::JointVelocityCmd({target_vel}));
-      } else if (!vel->Data().empty()) {
-        vel->Data()[0] = target_vel;
+          sim::components::JointForceCmd({target_force}));
+      } else {
+        *forceCmd = sim::components::JointForceCmd({target_force});
+      }
+    } else if (this->dataPtr->joints_[i].joint_control_method & POSITION) {
+      // calculate error with clamped position command
+      double position = this->dataPtr->joints_[i].joint_position;
+      double position_cmd_clamped = std::clamp(
+        this->dataPtr->joints_[i].joint_position_cmd, jointAxis->Data().Lower(),
+        jointAxis->Data().Upper());
+
+      double position_error = position - position_cmd_clamped;
+
+      double position_error_sign = copysign(1.0, position_error);
+
+      double position_error_abs_clamped =
+        std::clamp(
+        std::abs(position_error), 0.0,
+        std::abs(jointAxis->Data().Upper() - jointAxis->Data().Lower()));
+
+      // move forward with calculated position error
+      position_error = position_error_sign * position_error_abs_clamped;
+
+      double position_or_velocity_error = 0.0;
+
+      // check if cascade control is used for this joint
+      if (params_.mode.joints_map[this->dataPtr->joints_[i].name].use_cascade_control) {
+        // calculate target velocity - output of outer pid - input to inner pid
+        double target_vel = this->dataPtr->joints_[i].pid_pos.Update(
+          position_error, std::chrono::duration<double>(
+            period.to_chrono<std::chrono::nanoseconds>()));
+
+        double velocity_error =
+          this->dataPtr->joints_[i].joint_velocity -
+          std::clamp(
+          target_vel, -1.0 * jointAxis->Data().MaxVelocity(),
+          jointAxis->Data().MaxVelocity());
+
+        // prepare velocity error value for inner pid
+        position_or_velocity_error = velocity_error;
+      } else {
+        // prepare velocity error value for inner pid
+        position_or_velocity_error = position_error;
+      }
+
+      // calculate target force/torque - output of inner pid
+      double target_force = this->dataPtr->joints_[i].pid_vel.Update(
+        position_or_velocity_error,
+        std::chrono::duration<double>(period.to_chrono<std::chrono::nanoseconds>()));
+
+      // round the force
+      target_force = round(target_force * 10000.0) / 10000.0;
+
+      // remember for potential effort state interface
+      this->dataPtr->joints_[i].joint_effort_cmd = target_force;
+
+      auto forceCmd = this->dataPtr->ecm->Component<gz::sim::components::JointForceCmd>(
+        this->dataPtr->joints_[i].sim_joint);
+
+      if (forceCmd == nullptr) {
+        this->dataPtr->ecm->CreateComponent(
+          this->dataPtr->joints_[i].sim_joint,
+          gz::sim::components::JointForceCmd({target_force}));
+      } else {
+        *forceCmd = gz::sim::components::JointForceCmd({target_force});
       }
     } else if (this->dataPtr->joints_[i].joint_control_method & EFFORT) {
       if (!this->dataPtr->ecm->Component<sim::components::JointForceCmd>(
