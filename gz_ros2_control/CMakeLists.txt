@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.5)
+# cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 project(gz_ros2_control)
 
 # Default to C11
@@ -16,21 +17,28 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # Find dependencies
+set(THIS_PACKAGE_INCLUDE_DEPENDS
+  ament_index_cpp
+  controller_manager
+  generate_parameter_library
+  gz_sim_vendor
+  gz-sim
+  gz_plugin_vendor
+  gz-plugin
+  hardware_interface
+  pluginlib
+  rclcpp
+  yaml_cpp_vendor
+)
+
 find_package(ament_cmake REQUIRED)
-find_package(ament_index_cpp REQUIRED)
-find_package(controller_manager REQUIRED)
-find_package(hardware_interface REQUIRED)
-find_package(pluginlib REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(yaml_cpp_vendor REQUIRED)
+foreach(Dependency IN ITEMS ${THIS_PACKAGE_INCLUDE_DEPENDS})
+  find_package(${Dependency} REQUIRED)
+endforeach()
 
-find_package(gz_sim_vendor REQUIRED)
-find_package(gz-sim REQUIRED)
-
-find_package(gz_plugin_vendor REQUIRED)
-find_package(gz-plugin REQUIRED)
-
-include_directories(include)
+generate_parameter_library(gz_ros2_control_parameters
+  src/gz_ros2_control.yaml
+)
 
 #########
 
@@ -38,9 +46,14 @@ add_library(${PROJECT_NAME}-system SHARED
   src/gz_ros2_control_plugin.cpp
 )
 
+target_include_directories(${PROJECT_NAME}-system PUBLIC 
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
+
 target_link_libraries(${PROJECT_NAME}-system
   gz-sim::gz-sim
   gz-plugin::register
+  gz_ros2_control_parameters
 )
 ament_target_dependencies(${PROJECT_NAME}-system
   ament_index_cpp
@@ -62,13 +75,20 @@ ament_target_dependencies(gz_hardware_plugins
   hardware_interface
   rclcpp
 )
+
+target_include_directories(gz_hardware_plugins PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
+
 target_link_libraries(gz_hardware_plugins
   gz-sim::gz-sim
+  gz_ros2_control_parameters
 )
 
 ## Install
 install(TARGETS
   gz_hardware_plugins
+  gz_ros2_control_parameters
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -85,9 +105,14 @@ add_library(ign_ros2_control-system SHARED
   src/gz_ros2_control_plugin.cpp
 )
 
+target_include_directories(ign_ros2_control-system PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
+
 target_link_libraries(ign_ros2_control-system
   gz-sim::gz-sim
   gz-plugin::register
+  gz_ros2_control_parameters
 )
 ament_target_dependencies(ign_ros2_control-system
   ament_index_cpp
@@ -111,9 +136,11 @@ ament_export_libraries(ign_ros2_control-system gz_hardware_plugins)
 
 # Install directories
 install(TARGETS ${PROJECT_NAME}-system
+  gz_ros2_control_parameters
   DESTINATION lib
 )
 install(TARGETS ign_ros2_control-system
+  gz_ros2_control_parameters
   DESTINATION lib
 )
 
