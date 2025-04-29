@@ -1,5 +1,4 @@
-# cmake_minimum_required(VERSION 3.5)
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.5)
 project(gz_ros2_control)
 
 # Default to C11
@@ -46,7 +45,7 @@ add_library(${PROJECT_NAME}-system SHARED
   src/gz_ros2_control_plugin.cpp
 )
 
-target_include_directories(${PROJECT_NAME}-system PUBLIC 
+target_include_directories(${PROJECT_NAME}-system PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 

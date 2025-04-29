@@ -257,7 +257,7 @@ bool GazeboSimSystem::initSim(
     return false;
   }
 
-  //TODO(juliajia): check whether this is correct
+  // TODO(juliajia): check whether this is correct
   std::vector<std::string> joint_names;
   this->param_node_ =
     rclcpp::Node::make_shared(
@@ -388,7 +388,8 @@ bool GazeboSimSystem::initSim(
     param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".i_pos_min", i_pos_min});
     param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_pos_max", cmd_pos_max});
     param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_pos_min", cmd_pos_min});
-    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_pos_forward_gain", cmd_pos_forward_gain});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_pos_forward_gain",
+        cmd_pos_forward_gain});
 
     this->dataPtr->joints_[j].pid_pos.Init(
       p_gain_pos, i_gain_pos, d_gain_pos, i_pos_max, i_pos_min, cmd_pos_max,
@@ -443,7 +444,8 @@ bool GazeboSimSystem::initSim(
     param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".i_vel_min", i_vel_min});
     param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_vel_max", cmd_vel_max});
     param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_vel_min", cmd_vel_min});
-    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_vel_forward_gain", cmd_vel_forward_gain});
+    param_vec.push_back(rclcpp::Parameter{"gains." + joint_name + ".cmd_vel_forward_gain",
+        cmd_vel_forward_gain});
 
     this->dataPtr->joints_[j].pid_vel.Init(
       p_gain_vel, i_gain_vel, d_gain_vel, i_vel_max, i_vel_min, cmd_vel_max,
@@ -575,7 +577,8 @@ bool GazeboSimSystem::initSim(
 
     // check if joint is actuated (has command interfaces) or passive
     this->dataPtr->joints_[j].is_actuated = (joint_info.command_interfaces.size() > 0);
-    RCLCPP_INFO_STREAM(this->nh_->get_logger(), "Joint " << joint_name << " is actuated: " << this->dataPtr->joints_[j].is_actuated);
+    RCLCPP_INFO_STREAM(this->nh_->get_logger(),
+        "Joint " << joint_name << " is actuated: " << this->dataPtr->joints_[j].is_actuated);
   }
 
   // register the joint names parameter
@@ -743,7 +746,7 @@ CallbackReturn GazeboSimSystem::on_activate(const rclcpp_lifecycle::State & prev
 
 CallbackReturn GazeboSimSystem::on_deactivate(const rclcpp_lifecycle::State & previous_state)
 {
-  //TODO(juliajia): check whether this is correct
+  // TODO(juliajia): check whether this is correct
   stop_spin_ = true;
   spin_thread_.join();
   return CallbackReturn::SUCCESS;
@@ -861,7 +864,6 @@ hardware_interface::return_type GazeboSimSystem::write(
   const rclcpp::Time & /*time*/,
   const rclcpp::Duration & period)
 {
-
   // refresh params
   param_listener_->refresh_dynamic_parameters();
   params_ = param_listener_->get_params();
@@ -927,7 +929,6 @@ hardware_interface::return_type GazeboSimSystem::write(
       params_.gains.joints_map[this->dataPtr->joints_[i].name].cmd_vel_forward_gain);
 
     if (this->dataPtr->joints_[i].joint_control_method & VELOCITY) {
-
       double velocity = this->dataPtr->joints_[i].joint_velocity;
       double velocity_cmd_clamped = std::clamp(
         this->dataPtr->joints_[i].joint_velocity_cmd,

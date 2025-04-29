@@ -315,7 +315,7 @@ void GazeboSimROS2ControlPlugin::Configure(
     hold_joints =
       sdfPtr->GetElement("hold_joints")->Get<bool>();
   }
-  //TODO(juliajia): is this the same as p_pos in the parameters file?
+  // TODO(juliajia): is this the same as p_pos in the parameters file?
   double position_proportional_gain = 0.1;  // default
   if (sdfPtr->HasElement("position_proportional_gain")) {
     position_proportional_gain =
@@ -386,7 +386,7 @@ void GazeboSimROS2ControlPlugin::Configure(
     return;
   }
 
-  //TODO(juliajia): what is hold_joints?
+  // TODO(juliajia): what is hold_joints?
   try {
     this->dataPtr->node_->declare_parameter("hold_joints", rclcpp::ParameterValue(hold_joints));
   } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & e) {
@@ -406,7 +406,7 @@ void GazeboSimROS2ControlPlugin::Configure(
       this->dataPtr->node_->get_logger(), "Parameter 'hold_joints' value has wrong type, %s",
       e.what());
   }
-  //TODO(juliajia): what is position_proportional_gain? if so, should we deprecate it?
+  // TODO(juliajia): what is position_proportional_gain? if so, should we deprecate it?
   try {
     this->dataPtr->node_->declare_parameter(
       "position_proportional_gain",
