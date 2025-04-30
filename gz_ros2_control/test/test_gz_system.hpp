@@ -72,8 +72,8 @@ hardware_interface::ComponentInfo create_component_info(
   for (const auto & param : parameters) {
     component_info.parameters[param.first] = param.second;
   }
-  
+
   return component_info;
 }
 
-#endif  // GZ_ROS2_CONTROL__TEST_GZ_SYSTEM_HPP_ 
+#endif  // GZ_ROS2_CONTROL__TEST_GZ_SYSTEM_HPP_

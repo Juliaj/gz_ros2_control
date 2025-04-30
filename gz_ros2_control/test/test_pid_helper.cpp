@@ -28,7 +28,7 @@ using namespace gz_ros2_control;
 
 // Fix std::clamp issue
 template<class T>
-constexpr const T& custom_clamp(const T& v, const T& lo, const T& hi)
+constexpr const T & custom_clamp(const T & v, const T & lo, const T & hi)
 {
   return v < lo ? lo : hi < v ? hi : v;
 }
@@ -38,7 +38,7 @@ TEST(TestPidConfigHelper, TestConfigurePid)
 {
   // Create a PID controller
   gz::math::PID pid;
-  
+
   // Configure with test values
   PidConfigHelper::configure_pid(
     pid,
@@ -51,7 +51,7 @@ TEST(TestPidConfigHelper, TestConfigurePid)
     -10.0,  // cmd min
     0.2     // cmd offset
   );
-  
+
   // Verify values were set correctly
   EXPECT_DOUBLE_EQ(pid.PGain(), 1.0);
   EXPECT_DOUBLE_EQ(pid.IGain(), 0.5);
@@ -69,19 +69,19 @@ TEST(TestPidConfigHelper, TestVelocityTargetForce)
   // Create and configure a PID controller
   gz::math::PID pid;
   pid.Init(1.0, 0.1, 0.0, 1.0, -1.0, 10.0, -10.0, 0.0);
-  
+
   // Set up test values
   double current_velocity = 2.0;
   double target_velocity = 5.0;
   double max_velocity = 10.0;
-  
+
   // Create period (100ms)
   rclcpp::Duration period = rclcpp::Duration::from_seconds(0.1);
-  
+
   // Calculate target force
   double target_force = PidConfigHelper::calculate_velocity_target_force(
     pid, current_velocity, target_velocity, max_velocity, period);
-  
+
   // For this simple test case, expected force should be:
   // P-term = 1.0 * (2.0 - 5.0) = -3.0
   // Since we're using a simple P controller, expect around -3.0
@@ -96,13 +96,13 @@ TEST(TestPidConfigHelper, TestPositionTargetForceCascade)
   // Create and configure PID controllers
   gz::math::PID pos_pid;
   gz::math::PID vel_pid;
-  
+
   // Position -> Velocity controller
   pos_pid.Init(2.0, 0.0, 0.0, 0.0, 0.0, 10.0, -10.0, 0.0);
-  
+
   // Velocity -> Effort controller
   vel_pid.Init(1.0, 0.0, 0.0, 0.0, 0.0, 10.0, -10.0, 0.0);
-  
+
   // Set up test values
   double current_position = 1.0;
   double target_position = 3.0;
@@ -111,15 +111,15 @@ TEST(TestPidConfigHelper, TestPositionTargetForceCascade)
   double upper_limit = 5.0;
   double max_velocity = 10.0;
   bool use_cascade = true;
-  
+
   // Create period (100ms)
   rclcpp::Duration period = rclcpp::Duration::from_seconds(0.1);
-  
+
   // Calculate target force
   double target_force = PidConfigHelper::calculate_position_target_force(
     pos_pid, vel_pid, current_position, target_position, current_velocity,
     lower_limit, upper_limit, max_velocity, use_cascade, period);
-  
+
   // For cascade mode:
   // Pos error = 1.0 - 3.0 = -2.0
   // Target vel = pos_p_gain * pos_error = 2.0 * -2.0 = -4.0
@@ -134,13 +134,13 @@ TEST(TestPidConfigHelper, TestPositionTargetForceDirect)
   // Create and configure PID controllers
   gz::math::PID pos_pid;
   gz::math::PID vel_pid;
-  
+
   // Position controller (not used in direct mode)
   pos_pid.Init(2.0, 0.0, 0.0, 0.0, 0.0, 10.0, -10.0, 0.0);
-  
+
   // Velocity -> Effort controller
   vel_pid.Init(1.0, 0.0, 0.0, 0.0, 0.0, 10.0, -10.0, 0.0);
-  
+
   // Set up test values
   double current_position = 1.0;
   double target_position = 3.0;
@@ -149,15 +149,15 @@ TEST(TestPidConfigHelper, TestPositionTargetForceDirect)
   double upper_limit = 5.0;
   double max_velocity = 10.0;
   bool use_cascade = false;
-  
+
   // Create period (100ms)
   rclcpp::Duration period = rclcpp::Duration::from_seconds(0.1);
-  
+
   // Calculate target force
   double target_force = PidConfigHelper::calculate_position_target_force(
     pos_pid, vel_pid, current_position, target_position, current_velocity,
     lower_limit, upper_limit, max_velocity, use_cascade, period);
-  
+
   // For direct mode:
   // Pos error = 1.0 - 3.0 = -2.0
   // Target force = vel_p_gain * pos_error = 1.0 * -2.0 = -2.0
@@ -168,4 +168,4 @@ int main(int argc, char ** argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
-} 
+}

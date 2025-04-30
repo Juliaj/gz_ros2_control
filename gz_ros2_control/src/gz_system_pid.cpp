@@ -20,7 +20,8 @@ namespace gz_ros2_control
 
 // Define a custom clamp function since older compilers may not have std::clamp
 template<typename T>
-T clamp(const T& value, const T& low, const T& high) {
+T clamp(const T & value, const T & low, const T & high)
+{
   return std::max(low, std::min(value, high));
 }
 
@@ -70,7 +71,7 @@ double PidConfigHelper::calculate_velocity_target_force(
   // Clamp the target velocity to limits
   double velocity_cmd_clamped = clamp(
     target_velocity,
-    -1.0 * max_velocity, 
+    -1.0 * max_velocity,
     max_velocity);
 
   // Calculate velocity error
@@ -98,7 +99,7 @@ double PidConfigHelper::calculate_position_target_force(
 {
   // Clamp the target position to joint limits
   double position_cmd_clamped = clamp(
-    target_position, 
+    target_position,
     lower_limit,
     upper_limit);
 
@@ -108,7 +109,7 @@ double PidConfigHelper::calculate_position_target_force(
   // Apply sign and limit to position error
   double position_error_sign = copysign(1.0, position_error);
   double position_error_abs_clamped = clamp(
-    std::abs(position_error), 
+    std::abs(position_error),
     0.0,
     std::abs(upper_limit - lower_limit));
   position_error = position_error_sign * position_error_abs_clamped;
@@ -120,12 +121,12 @@ double PidConfigHelper::calculate_position_target_force(
   if (use_cascade_control) {
     // Calculate target velocity from position error (cascade control)
     double target_vel = pos_pid.Update(
-      position_error, 
+      position_error,
       std::chrono::duration<double>(period.to_chrono<std::chrono::nanoseconds>()));
 
     // Calculate velocity error
     double velocity_error = current_velocity - clamp(
-      target_vel, 
+      target_vel,
       -1.0 * max_velocity,
       max_velocity);
 
@@ -214,4 +215,4 @@ void PidConfigHelper::configure_velocity_pid(
     cmd_vel_min, cmd_vel_forward_gain);
 }
 
-}  // namespace gz_ros2_control 
+}  // namespace gz_ros2_control

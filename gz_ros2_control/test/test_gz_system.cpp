@@ -186,7 +186,8 @@ TEST_F(TestGzSystem, pid_parameters_explicit)
 TEST_F(TestGzSystem, TestAckermannDriveConfiguration)
 {
   // XML string based on the provided template
-  const std::string xml_string = R"(
+  const std::string xml_string =
+    R"(
     <ros2_control name="GazeboSystem" type="system">
       <hardware>
         <plugin>gz_ros2_control/GazeboSimSystem</plugin>
@@ -400,7 +401,7 @@ TEST_F(TestGzSystem, TestParameterPrecedence)
     5.0    // max_velocity
   );
 
-  // Should fall back to dummy_p_pos since we don't have the global param 
+  // Should fall back to dummy_p_pos since we don't have the global param
   // in the actual system implementation
   EXPECT_DOUBLE_EQ(pid.PGain(), 10.0);
 }
@@ -413,7 +414,8 @@ TEST_F(TestGzSystem, TestCombinedParameters)
   node_->declare_parameter("position_proportional_gain", 0.5);
 
   // XML with some joints specifying parameters and others not
-  const std::string xml_string = R"(
+  const std::string xml_string =
+    R"(
     <ros2_control name="GazeboSystem" type="system">
       <hardware>
         <plugin>gz_ros2_control/GazeboSimSystem</plugin>
@@ -462,7 +464,7 @@ TEST_F(TestGzSystem, TestCombinedParameters)
     10.0,   // dummy_p_pos (would be used if no p_pos)
     5.0     // max_velocity
   );
-  
+
   // Should use joint-specific value
   EXPECT_DOUBLE_EQ(pid.PGain(), 1000.0);
   EXPECT_DOUBLE_EQ(pid.IGain(), 10.0);  // From joint param
@@ -483,7 +485,7 @@ TEST_F(TestGzSystem, TestCombinedParameters)
     10.0,   // dummy_p_pos
     5.0     // max_velocity
   );
-  
+
   // Without a direct link to the global parameter system,
   // the test will use the dummy_p_pos
   EXPECT_DOUBLE_EQ(pid.PGain(), 10.0);  // Will use dummy_p_pos

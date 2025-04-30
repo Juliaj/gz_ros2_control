@@ -83,10 +83,10 @@ public:
     double i_max, double i_min,
     double cmd_max, double cmd_min,
     double cmd_offset);
-    
+
   /// \brief Calculate target force for velocity control
   /// \param pid The velocity PID controller
-  /// \param current_velocity Current joint velocity 
+  /// \param current_velocity Current joint velocity
   /// \param target_velocity Target velocity (command)
   /// \param max_velocity Maximum allowable velocity
   /// \param period Control period duration
@@ -97,7 +97,7 @@ public:
     double target_velocity,
     double max_velocity,
     const rclcpp::Duration & period);
-    
+
   /// \brief Calculate target force for position control
   /// \param pos_pid The position PID controller
   /// \param vel_pid The velocity PID controller
@@ -121,7 +121,7 @@ public:
     double max_velocity,
     bool use_cascade_control,
     const rclcpp::Duration & period);
-    
+
 private:
   /// \brief Helper to get parameter value with default fallback
   static double get_param(
@@ -139,4 +139,4 @@ private:
 
 }  // namespace gz_ros2_control
 
-#endif  // GZ_ROS2_CONTROL__GZ_SYSTEM_PID_HPP_ 
+#endif  // GZ_ROS2_CONTROL__GZ_SYSTEM_PID_HPP_
