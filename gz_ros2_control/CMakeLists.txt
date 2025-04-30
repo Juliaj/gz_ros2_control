@@ -89,6 +89,7 @@ target_link_libraries(gz_hardware_plugins
 install(TARGETS
   gz_hardware_plugins
   gz_ros2_control_parameters
+  EXPORT gz_ros2_control
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
