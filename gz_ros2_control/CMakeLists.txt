@@ -89,9 +89,11 @@ target_link_libraries(gz_hardware_plugins
 install(TARGETS
   gz_hardware_plugins
   gz_ros2_control_parameters
+  EXPORT gz_ros2_control
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
 )
 
 install(DIRECTORY
@@ -136,11 +138,11 @@ ament_export_libraries(ign_ros2_control-system gz_hardware_plugins)
 
 # Install directories
 install(TARGETS ${PROJECT_NAME}-system
-  gz_ros2_control_parameters
+  EXPORT gz_ros2_control
   DESTINATION lib
 )
 install(TARGETS ign_ros2_control-system
-  gz_ros2_control_parameters
+  EXPORT gz_ros2_control
   DESTINATION lib
 )
 

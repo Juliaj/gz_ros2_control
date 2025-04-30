@@ -588,6 +588,7 @@ hardware_interface::return_type GazeboSimSystem::read(
       gz::physics::Vector3d{this->dataPtr->joints_[i].joint_axis.Xyz()[0],
         this->dataPtr->joints_[i].joint_axis.Xyz()[1],
         this->dataPtr->joints_[i].joint_axis.Xyz()[2]});
+    RCLCPP_INFO_THROTTLE(this->nh_->get_logger(), *this->get_clock(), 1000, "In read, joint %s, joint_effort: %f", this->dataPtr->joints_[i].name.c_str(), this->dataPtr->joints_[i].joint_effort);
   }
 
   for (unsigned int i = 0; i < this->dataPtr->imus_.size(); ++i) {
@@ -712,6 +713,7 @@ hardware_interface::return_type GazeboSimSystem::write(
           this->dataPtr->joints_[i].sim_joint);
         *jointEffortCmd = sim::components::JointForceCmd(
           {this->dataPtr->joints_[i].joint_effort_cmd});
+        RCLCPP_INFO_THROTTLE(this->nh_->get_logger(), *this->get_clock(), 1000, "In write, joint %s, joint_effort_cmd: %f", this->dataPtr->joints_[i].name.c_str(), this->dataPtr->joints_[i].joint_effort_cmd);
       }
     } else if (this->dataPtr->joints_[i].is_actuated && this->dataPtr->hold_joints_) {
       // Fallback case is a velocity command of zero (only for actuated joints)
