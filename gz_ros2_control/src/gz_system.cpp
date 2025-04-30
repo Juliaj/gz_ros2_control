@@ -54,7 +54,8 @@
 #include <normApi.h>
 
 // Add header include at the top with other includes
-#include "gz_ros2_control/gz_system_pid.hpp"
+#include "gz_ros2_control/joint_pid_helper.hpp"
+#include <control_toolbox/pid.hpp>
 
 struct jointData
 {
@@ -95,10 +96,10 @@ struct jointData
   gz_ros2_control::GazeboSimSystemInterface::ControlMethod joint_control_method;
 
   /// \brief PID for position control
-  gz::math::PID pid_pos;
+  control_toolbox::Pid pid_pos;
 
   /// \brief PID for velocity control
-  gz::math::PID pid_vel;
+  control_toolbox::Pid pid_vel;
 };
 
 class ImuData
@@ -346,7 +347,7 @@ bool GazeboSimSystem::initSim(
     double initial_p_pos = 10 * max_velocity / abs(upper - lower);
 
     // Initialize PID controllers using our helper class
-    PidConfigHelper pid_helper;
+    JointPosVelPidHelper pid_helper;
 
     // Configure position PID
     pid_helper.configure_position_pid(
@@ -822,7 +823,7 @@ hardware_interface::return_type GazeboSimSystem::write(
         i].sim_joint);
 
     // update PID for position control
-    PidConfigHelper::configure_pid(
+    JointPosVelPidHelper::configure_pid(
       this->dataPtr->joints_[i].pid_pos,
       params_.gains.joints_map[this->dataPtr->joints_[i].name].p_pos,
       params_.gains.joints_map[this->dataPtr->joints_[i].name].i_pos,
@@ -834,7 +835,7 @@ hardware_interface::return_type GazeboSimSystem::write(
       params_.gains.joints_map[this->dataPtr->joints_[i].name].cmd_pos_forward_gain);
 
     // update PID for velocity control
-    PidConfigHelper::configure_pid(
+    JointPosVelPidHelper::configure_pid(
       this->dataPtr->joints_[i].pid_vel,
       params_.gains.joints_map[this->dataPtr->joints_[i].name].p_vel,
       params_.gains.joints_map[this->dataPtr->joints_[i].name].i_vel,
@@ -851,7 +852,7 @@ hardware_interface::return_type GazeboSimSystem::write(
       double velocity_cmd = this->dataPtr->joints_[i].joint_velocity_cmd;
 
       // Calculate target force using the helper method
-      double target_force = PidConfigHelper::calculate_velocity_target_force(
+      double target_force = JointPosVelPidHelper::calculate_velocity_target_force(
         this->dataPtr->joints_[i].pid_vel,
         velocity,
         velocity_cmd,
@@ -881,7 +882,7 @@ hardware_interface::return_type GazeboSimSystem::write(
       // Calculate target force using the helper method
       bool use_cascade =
         params_.mode.joints_map[this->dataPtr->joints_[i].name].use_cascade_control;
-      double target_force = PidConfigHelper::calculate_position_target_force(
+      double target_force = JointPosVelPidHelper::calculate_position_target_force(
         this->dataPtr->joints_[i].pid_pos,
         this->dataPtr->joints_[i].pid_vel,
         this->dataPtr->joints_[i].joint_position,

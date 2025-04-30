@@ -19,6 +19,7 @@ endif()
 set(THIS_PACKAGE_INCLUDE_DEPENDS
   ament_index_cpp
   controller_manager
+  control_toolbox
   generate_parameter_library
   gz_sim_vendor
   gz-sim
@@ -57,6 +58,7 @@ target_link_libraries(${PROJECT_NAME}-system
 ament_target_dependencies(${PROJECT_NAME}-system
   ament_index_cpp
   controller_manager
+  control_toolbox
   hardware_interface
   pluginlib
   rclcpp
@@ -68,9 +70,10 @@ ament_target_dependencies(${PROJECT_NAME}-system
 
 add_library(gz_hardware_plugins SHARED
   src/gz_system.cpp
-  src/gz_system_pid.cpp
+  src/joint_pid_helper.cpp
 )
 ament_target_dependencies(gz_hardware_plugins
+  control_toolbox
   rclcpp_lifecycle
   hardware_interface
   rclcpp
@@ -119,6 +122,7 @@ target_link_libraries(ign_ros2_control-system
 ament_target_dependencies(ign_ros2_control-system
   ament_index_cpp
   controller_manager
+  control_toolbox
   hardware_interface
   pluginlib
   rclcpp
@@ -136,18 +140,18 @@ if(BUILD_TESTING)
 
   # Add the PID helper test
   ament_add_gtest(
-    test_pid_helper
-    test/test_pid_helper.cpp
+    test_joint_pid_helper
+    test/test_joint_pid_helper.cpp
   )
-  target_include_directories(test_pid_helper PUBLIC
+  target_include_directories(test_joint_pid_helper PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
-  ament_target_dependencies(test_pid_helper
+  ament_target_dependencies(test_joint_pid_helper
     rclcpp_lifecycle
     hardware_interface
     rclcpp
   )
-  target_link_libraries(test_pid_helper
+  target_link_libraries(test_joint_pid_helper
     gz_hardware_plugins
     gz-sim::gz-sim
   )

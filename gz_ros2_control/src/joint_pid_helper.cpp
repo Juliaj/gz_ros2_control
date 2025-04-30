@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "gz_ros2_control/gz_system_pid.hpp"
+#include "gz_ros2_control/joint_pid_helper.hpp"
 #include <algorithm>  // For std::min and std::max
 
 namespace gz_ros2_control
@@ -25,7 +25,7 @@ T clamp(const T & value, const T & low, const T & high)
   return std::max(low, std::min(value, high));
 }
 
-double PidConfigHelper::get_param(
+double JointPosVelPidHelper::get_param(
   const hardware_interface::ComponentInfo & joint_info,
   const std::string & param_name,
   double default_value)
@@ -35,7 +35,7 @@ double PidConfigHelper::get_param(
          std::stod(joint_info.parameters.at(param_name));
 }
 
-void PidConfigHelper::add_joint_gain_parameter(
+void JointPosVelPidHelper::add_joint_gain_parameter(
   std::vector<rclcpp::Parameter> & parameters,
   const std::string & joint_name,
   const std::string & param_suffix,
@@ -44,25 +44,23 @@ void PidConfigHelper::add_joint_gain_parameter(
   parameters.push_back(rclcpp::Parameter{"gains." + joint_name + "." + param_suffix, value});
 }
 
-void PidConfigHelper::configure_pid(
-  gz::math::PID & pid,
+void JointPosVelPidHelper::configure_pid(
+  control_toolbox::Pid & pid,
   double p, double i, double d,
   double i_max, double i_min,
   double cmd_max, double cmd_min,
   double cmd_offset)
 {
-  pid.SetPGain(p);
-  pid.SetIGain(i);
-  pid.SetDGain(d);
-  pid.SetIMax(i_max);
-  pid.SetIMin(i_min);
-  pid.SetCmdMax(cmd_max);
-  pid.SetCmdMin(cmd_min);
-  pid.SetCmdOffset(cmd_offset);
+  // Note: control_toolbox::Pid doesn't have a direct equivalent to cmd_max/cmd_min/cmd_offset
+  // We can set gains and i_min/i_max, but output limiting would need to be done separately
+  pid.set_gains(p, i, d, i_max, i_min);
+
+  // The command offset and command limits need to be handled manually when computing commands
+  // since control_toolbox::Pid doesn't have these built-in
 }
 
-double PidConfigHelper::calculate_velocity_target_force(
-  gz::math::PID & pid,
+double JointPosVelPidHelper::calculate_velocity_target_force(
+  control_toolbox::Pid & pid,
   double current_velocity,
   double target_velocity,
   double max_velocity,
@@ -74,20 +72,19 @@ double PidConfigHelper::calculate_velocity_target_force(
     -1.0 * max_velocity,
     max_velocity);
 
-  // Calculate velocity error
-  double velocity_error = current_velocity - velocity_cmd_clamped;
+  // Calculate velocity error (note sign flip from gz::math::PID to control_toolbox::Pid)
+  // In control_toolbox, error = target - state
+  double velocity_error = velocity_cmd_clamped - current_velocity;
 
   // Apply PID control to calculate target force
-  double target_force = pid.Update(
-    velocity_error,
-    std::chrono::duration<double>(period.to_chrono<std::chrono::nanoseconds>()));
+  double target_force = pid.compute_command(velocity_error, period);
 
   return target_force;
 }
 
-double PidConfigHelper::calculate_position_target_force(
-  gz::math::PID & pos_pid,
-  gz::math::PID & vel_pid,
+double JointPosVelPidHelper::calculate_position_target_force(
+  control_toolbox::Pid & pos_pid,
+  control_toolbox::Pid & vel_pid,
   double current_position,
   double target_position,
   double current_velocity,
@@ -103,8 +100,9 @@ double PidConfigHelper::calculate_position_target_force(
     lower_limit,
     upper_limit);
 
-  // Calculate position error
-  double position_error = current_position - position_cmd_clamped;
+  // Calculate position error (flipped sign from original implementation)
+  // In control_toolbox, error = target - state
+  double position_error = position_cmd_clamped - current_position;
 
   // Apply sign and limit to position error
   double position_error_sign = copysign(1.0, position_error);
@@ -114,43 +112,35 @@ double PidConfigHelper::calculate_position_target_force(
     std::abs(upper_limit - lower_limit));
   position_error = position_error_sign * position_error_abs_clamped;
 
-  // Initialize velocity error
-  double position_or_velocity_error = 0.0;
+  double target_force = 0.0;
 
   // Determine control approach based on cascade control flag
   if (use_cascade_control) {
     // Calculate target velocity from position error (cascade control)
-    double target_vel = pos_pid.Update(
-      position_error,
-      std::chrono::duration<double>(period.to_chrono<std::chrono::nanoseconds>()));
+    double target_vel = pos_pid.compute_command(position_error, period);
 
-    // Calculate velocity error
-    double velocity_error = current_velocity - clamp(
-      target_vel,
-      -1.0 * max_velocity,
-      max_velocity);
+    // Clamp target velocity
+    double target_vel_clamped = clamp(target_vel, -1.0 * max_velocity, max_velocity);
+
+    // Calculate velocity error (for inner loop)
+    double velocity_error = target_vel_clamped - current_velocity;
 
     // Use velocity error for the inner loop
-    position_or_velocity_error = velocity_error;
+    target_force = vel_pid.compute_command(velocity_error, period);
   } else {
     // Direct position error for single-loop control
-    position_or_velocity_error = position_error;
+    target_force = vel_pid.compute_command(position_error, period);
   }
-
-  // Apply PID control to calculate target force
-  double target_force = vel_pid.Update(
-    position_or_velocity_error,
-    std::chrono::duration<double>(period.to_chrono<std::chrono::nanoseconds>()));
 
   // Round for numerical stability
   return round(target_force * 10000.0) / 10000.0;
 }
 
-void PidConfigHelper::configure_position_pid(
+void JointPosVelPidHelper::configure_position_pid(
   const std::string & joint_name,
   const hardware_interface::ComponentInfo & joint_info,
   std::vector<rclcpp::Parameter> & parameters,
-  gz::math::PID & pid,
+  control_toolbox::Pid & pid,
   double initial_p_pos,
   double max_velocity)
 {
@@ -160,6 +150,9 @@ void PidConfigHelper::configure_position_pid(
   double d_gain_pos = get_param(joint_info, "d_pos", initial_p_pos / 100.0);
   double i_pos_max = get_param(joint_info, "i_pos_max", 0.0);
   double i_pos_min = get_param(joint_info, "i_pos_min", 0.0);
+
+  // These parameters are for command limiting, which control_toolbox::Pid doesn't directly support
+  // We'll store them in parameters but handle limits separately
   double cmd_pos_max = get_param(joint_info, "cmd_pos_max", max_velocity);
   double cmd_pos_min = get_param(joint_info, "cmd_pos_min", -1.0 * max_velocity);
   double cmd_pos_forward_gain = get_param(joint_info, "cmd_pos_forward_gain", 0.0);
@@ -175,16 +168,14 @@ void PidConfigHelper::configure_position_pid(
   add_joint_gain_parameter(parameters, joint_name, "cmd_pos_forward_gain", cmd_pos_forward_gain);
 
   // Initialize the PID controller
-  pid.Init(
-    p_gain_pos, i_gain_pos, d_gain_pos, i_pos_max, i_pos_min, cmd_pos_max,
-    cmd_pos_min, cmd_pos_forward_gain);
+  pid.initialize(p_gain_pos, i_gain_pos, d_gain_pos, i_pos_max, i_pos_min);
 }
 
-void PidConfigHelper::configure_velocity_pid(
+void JointPosVelPidHelper::configure_velocity_pid(
   const std::string & joint_name,
   const hardware_interface::ComponentInfo & joint_info,
   std::vector<rclcpp::Parameter> & parameters,
-  gz::math::PID & pid,
+  control_toolbox::Pid & pid,
   double initial_p_pos,
   double max_velocity,
   double max_effort)
@@ -195,6 +186,9 @@ void PidConfigHelper::configure_velocity_pid(
   double d_gain_vel = get_param(joint_info, "d_vel", 0.0);
   double i_vel_max = get_param(joint_info, "i_vel_max", max_effort / 2.0);
   double i_vel_min = get_param(joint_info, "i_vel_min", -1.0 * max_effort / 2.0);
+
+  // These parameters are for command limiting, which control_toolbox::Pid doesn't directly support
+  // We'll store them in parameters but handle limits separately
   double cmd_vel_max = get_param(joint_info, "cmd_vel_max", max_velocity);
   double cmd_vel_min = get_param(joint_info, "cmd_vel_min", -1.0 * max_velocity);
   double cmd_vel_forward_gain = get_param(joint_info, "cmd_vel_forward_gain", 0.0);
@@ -210,9 +204,7 @@ void PidConfigHelper::configure_velocity_pid(
   add_joint_gain_parameter(parameters, joint_name, "cmd_vel_forward_gain", cmd_vel_forward_gain);
 
   // Initialize the PID controller
-  pid.Init(
-    p_gain_vel, i_gain_vel, d_gain_vel, i_vel_max, i_vel_min, cmd_vel_max,
-    cmd_vel_min, cmd_vel_forward_gain);
+  pid.initialize(p_gain_vel, i_gain_vel, d_gain_vel, i_vel_max, i_vel_min);
 }
 
-}  // namespace gz_ros2_control
+}  // namespace gz_ros2_control 

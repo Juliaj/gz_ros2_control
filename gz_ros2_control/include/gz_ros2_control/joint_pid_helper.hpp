@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GZ_ROS2_CONTROL__GZ_SYSTEM_PID_HPP_
-#define GZ_ROS2_CONTROL__GZ_SYSTEM_PID_HPP_
+#ifndef GZ_ROS2_CONTROL__JOINT_PID_HELPER_HPP_
+#define GZ_ROS2_CONTROL__JOINT_PID_HELPER_HPP_
 
 #include <memory>
 #include <string>
@@ -23,17 +23,17 @@
 
 #include <hardware_interface/hardware_info.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <gz/math/PID.hh>
+#include <control_toolbox/pid.hpp>
 
 namespace gz_ros2_control
 {
 
 /// \brief Helper class for PID parameter configuration
-class PidConfigHelper
+class JointPosVelPidHelper
 {
 public:
   /// \brief Constructor
-  PidConfigHelper() = default;
+  JointPosVelPidHelper() = default;
 
   /// \brief Initialize a position PID controller with parameters
   /// \param joint_name Name of the joint
@@ -46,7 +46,7 @@ public:
     const std::string & joint_name,
     const hardware_interface::ComponentInfo & joint_info,
     std::vector<rclcpp::Parameter> & parameters,
-    gz::math::PID & pid,
+    control_toolbox::Pid & pid,
     double initial_p_pos,
     double max_velocity);
 
@@ -62,7 +62,7 @@ public:
     const std::string & joint_name,
     const hardware_interface::ComponentInfo & joint_info,
     std::vector<rclcpp::Parameter> & parameters,
-    gz::math::PID & pid,
+    control_toolbox::Pid & pid,
     double initial_p_pos,
     double max_velocity,
     double max_effort);
@@ -78,7 +78,7 @@ public:
   /// \param cmd_min Minimum command output
   /// \param cmd_offset Command offset
   static void configure_pid(
-    gz::math::PID & pid,
+    control_toolbox::Pid & pid,
     double p, double i, double d,
     double i_max, double i_min,
     double cmd_max, double cmd_min,
@@ -92,7 +92,7 @@ public:
   /// \param period Control period duration
   /// \return Calculated force/torque command
   static double calculate_velocity_target_force(
-    gz::math::PID & pid,
+    control_toolbox::Pid & pid,
     double current_velocity,
     double target_velocity,
     double max_velocity,
@@ -111,8 +111,8 @@ public:
   /// \param period Control period duration
   /// \return Calculated force/torque command
   static double calculate_position_target_force(
-    gz::math::PID & pos_pid,
-    gz::math::PID & vel_pid,
+    control_toolbox::Pid & pos_pid,
+    control_toolbox::Pid & vel_pid,
     double current_position,
     double target_position,
     double current_velocity,
@@ -139,4 +139,4 @@ private:
 
 }  // namespace gz_ros2_control
 
-#endif  // GZ_ROS2_CONTROL__GZ_SYSTEM_PID_HPP_
+#endif  // GZ_ROS2_CONTROL__JOINT_PID_HELPER_HPP_ 

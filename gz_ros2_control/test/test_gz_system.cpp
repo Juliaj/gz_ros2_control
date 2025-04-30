@@ -12,38 +12,92 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <gtest/gtest.h>
+#include "test_gz_system.hpp"
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#include "gz_ros2_control/gz_system.hpp"
-#include "gz_ros2_control/gz_system_pid.hpp"
-#include "hardware_interface/component_parser.hpp"
+#include <control_toolbox/pid.hpp>
+#include <gtest/gtest.h>
+#include <hardware_interface/component_parser.hpp>
+#include <hardware_interface/hardware_info.hpp>
+#include <hardware_interface/resource_manager.hpp>
 #include <rclcpp/rclcpp.hpp>
 
-#include "test_gz_system.hpp"
+#include "gz_ros2_control/gz_system.hpp"
+#include "gz_ros2_control/joint_pid_helper.hpp"
 
 namespace gz_ros2_control
 {
+// Test class for the GzSystem
+class TestGzSystem : public ::testing::Test
+{
+public:
+  TestGzSystem()
+  {
+    // Create a test node (ROS is already initialized in main)
+    node_ = std::make_shared<rclcpp::Node>("test_gz_system_node");
+  }
+
+  ~TestGzSystem()
+  {
+    // Just reset the node, don't shutdown ROS (done in main)
+    if (node_) {
+      node_.reset();
+    }
+  }
+
+  // Helper method to create a component info with parameters
+  hardware_interface::ComponentInfo create_component_info(
+    const std::string & name,
+    const std::vector<std::string> & command_interfaces,
+    const std::vector<std::string> & state_interfaces,
+    const std::unordered_map<std::string, std::string> & parameters = {})
+  {
+    hardware_interface::ComponentInfo component_info;
+    component_info.name = name;
+
+    for (const auto & interface : command_interfaces) {
+      hardware_interface::InterfaceInfo interface_info;
+      interface_info.name = interface;
+      component_info.command_interfaces.push_back(interface_info);
+    }
+
+    for (const auto & interface : state_interfaces) {
+      hardware_interface::InterfaceInfo interface_info;
+      interface_info.name = interface;
+      component_info.state_interfaces.push_back(interface_info);
+    }
+
+    component_info.parameters = parameters;
+
+    return component_info;
+  }
+
+  // Shared ROS node for parameter handling
+  rclcpp::Node::SharedPtr node_;
+};
+
 // Test for PID parameter parsing with defaults
 TEST_F(TestGzSystem, pid_parameters_defaults)
 {
   // Create PID helper
-  PidConfigHelper pid_helper;
+  JointPosVelPidHelper pid_helper;
 
   // Create hardware info for velocity controlled joint (based on XML template)
   auto velocity_joint_info = create_component_info(
     "rear_left_wheel_joint",
     {"velocity"},
     {"velocity", "position"},
-    {{"p_vel", "1000.0"}});
+    std::unordered_map<std::string, std::string>{{"p_vel", "1000.0"}});
 
   // Test vectors for storing parameters
   std::vector<rclcpp::Parameter> parameters;
-  gz::math::PID pid;
+  control_toolbox::Pid pid;
 
   // Default values for initialization
   double dummy_p_pos = 10.0;  // Arbitrary default
@@ -62,16 +116,20 @@ TEST_F(TestGzSystem, pid_parameters_defaults)
   );
 
   // Verify the PID parameters were properly set
-  EXPECT_DOUBLE_EQ(pid.PGain(), 1000.0);  // From our XML p_vel
-  EXPECT_DOUBLE_EQ(pid.IGain(), dummy_p_pos / 1000.0);  // Default
-  EXPECT_DOUBLE_EQ(pid.DGain(), 0.0);  // Default
+  double p, i, d, i_max, i_min;
+  bool antiwindup;
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+
+  EXPECT_DOUBLE_EQ(p, 1000.0);  // From our XML p_vel
+  EXPECT_DOUBLE_EQ(i, dummy_p_pos / 1000.0);  // Default
+  EXPECT_DOUBLE_EQ(d, 0.0);  // Default
 
   // Create hardware info for position controlled joint (based on XML template)
   auto position_joint_info = create_component_info(
     "left_wheel_steering_joint",
     {"position"},
     {"position"},
-    {{"p_pos", "1000.0"}});
+    std::unordered_map<std::string, std::string>{{"p_pos", "1000.0"}});
 
   // Configure position PID
   pid_helper.configure_position_pid(
@@ -84,23 +142,25 @@ TEST_F(TestGzSystem, pid_parameters_defaults)
   );
 
   // Verify the PID parameters were properly set
-  EXPECT_DOUBLE_EQ(pid.PGain(), 1000.0);  // From our XML p_pos
-  EXPECT_DOUBLE_EQ(pid.IGain(), 0.0);  // Default
-  EXPECT_DOUBLE_EQ(pid.DGain(), 1000.0 / 100.0);  // Default based on p_pos
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+
+  EXPECT_DOUBLE_EQ(p, 1000.0);  // From our XML p_pos
+  EXPECT_DOUBLE_EQ(i, 0.0);  // Default
+  EXPECT_DOUBLE_EQ(d, 1000.0 / 100.0);  // Default based on p_pos
 }
 
 // Test for PID parameter parsing with explicit values
 TEST_F(TestGzSystem, pid_parameters_explicit)
 {
   // Create PID helper
-  PidConfigHelper pid_helper;
+  JointPosVelPidHelper pid_helper;
 
   // Create hardware info for velocity controlled joint with full parameters
   auto velocity_joint_info = create_component_info(
     "rear_left_wheel_joint",
     {"velocity"},
     {"velocity", "position"},
-    {
+    std::unordered_map<std::string, std::string>{
       {"p_vel", "1000.0"},
       {"i_vel", "10.0"},
       {"d_vel", "5.0"},
@@ -113,7 +173,7 @@ TEST_F(TestGzSystem, pid_parameters_explicit)
 
   // Test vectors for storing parameters
   std::vector<rclcpp::Parameter> parameters;
-  gz::math::PID pid;
+  control_toolbox::Pid pid;
 
   // Default values for initialization
   double dummy_p_pos = 10.0;  // Arbitrary default
@@ -132,21 +192,23 @@ TEST_F(TestGzSystem, pid_parameters_explicit)
   );
 
   // Verify the PID parameters were properly set
-  EXPECT_DOUBLE_EQ(pid.PGain(), 1000.0);
-  EXPECT_DOUBLE_EQ(pid.IGain(), 10.0);
-  EXPECT_DOUBLE_EQ(pid.DGain(), 5.0);
-  EXPECT_DOUBLE_EQ(pid.IMax(), 50.0);
-  EXPECT_DOUBLE_EQ(pid.IMin(), -50.0);
-  EXPECT_DOUBLE_EQ(pid.CmdMax(), 5.0);
-  EXPECT_DOUBLE_EQ(pid.CmdMin(), -5.0);
-  EXPECT_DOUBLE_EQ(pid.CmdOffset(), 0.5);
+  double p, i, d, i_max, i_min;
+  bool antiwindup;
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+
+  EXPECT_DOUBLE_EQ(p, 1000.0);
+  EXPECT_DOUBLE_EQ(i, 10.0);
+  EXPECT_DOUBLE_EQ(d, 5.0);
+  EXPECT_DOUBLE_EQ(i_max, 50.0);
+  EXPECT_DOUBLE_EQ(i_min, -50.0);
+  // Note: cmd_max, cmd_min, cmd_offset aren't directly supported in control_toolbox::Pid
 
   // Create hardware info for position controlled joint with full parameters
   auto position_joint_info = create_component_info(
     "left_wheel_steering_joint",
     {"position"},
     {"position"},
-    {
+    std::unordered_map<std::string, std::string>{
       {"p_pos", "1000.0"},
       {"i_pos", "20.0"},
       {"d_pos", "10.0"},
@@ -158,7 +220,7 @@ TEST_F(TestGzSystem, pid_parameters_explicit)
     });
 
   // Reset PID object and parameters
-  pid = gz::math::PID();
+  pid = control_toolbox::Pid();
   parameters.clear();
 
   // Configure position PID
@@ -172,14 +234,14 @@ TEST_F(TestGzSystem, pid_parameters_explicit)
   );
 
   // Verify the PID parameters were properly set
-  EXPECT_DOUBLE_EQ(pid.PGain(), 1000.0);
-  EXPECT_DOUBLE_EQ(pid.IGain(), 20.0);
-  EXPECT_DOUBLE_EQ(pid.DGain(), 10.0);
-  EXPECT_DOUBLE_EQ(pid.IMax(), 100.0);
-  EXPECT_DOUBLE_EQ(pid.IMin(), -100.0);
-  EXPECT_DOUBLE_EQ(pid.CmdMax(), 2.0);
-  EXPECT_DOUBLE_EQ(pid.CmdMin(), -2.0);
-  EXPECT_DOUBLE_EQ(pid.CmdOffset(), 0.2);
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+
+  EXPECT_DOUBLE_EQ(p, 1000.0);
+  EXPECT_DOUBLE_EQ(i, 20.0);
+  EXPECT_DOUBLE_EQ(d, 10.0);
+  EXPECT_DOUBLE_EQ(i_max, 100.0);
+  EXPECT_DOUBLE_EQ(i_min, -100.0);
+  // Note: cmd_max, cmd_min, cmd_offset aren't directly supported in control_toolbox::Pid
 }
 
 // Test the complete ackermann drive XML configuration
@@ -225,9 +287,9 @@ TEST_F(TestGzSystem, TestAckermannDriveConfiguration)
   ASSERT_EQ(hardware_info[0].joints.size(), 4u);
 
   // Create PID helper for testing parsed values
-  PidConfigHelper pid_helper;
+  JointPosVelPidHelper pid_helper;
   std::vector<rclcpp::Parameter> parameters;
-  gz::math::PID pid;
+  control_toolbox::Pid pid;
 
   // Test first velocity joint (rear_left_wheel_joint)
   auto & rear_left_joint = hardware_info[0].joints[0];
@@ -247,7 +309,10 @@ TEST_F(TestGzSystem, TestAckermannDriveConfiguration)
     10.0,   // max_velocity
     100.0   // max_effort
   );
-  EXPECT_DOUBLE_EQ(pid.PGain(), 1000.0);
+  double p, i, d, i_max, i_min;
+  bool antiwindup;
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+  EXPECT_DOUBLE_EQ(p, 1000.0);
 
   // Test first position joint (left_wheel_steering_joint)
   auto & left_steering_joint = hardware_info[0].joints[2];
@@ -258,7 +323,7 @@ TEST_F(TestGzSystem, TestAckermannDriveConfiguration)
   EXPECT_EQ(left_steering_joint.parameters.at("p_pos"), "1000.0");
 
   // Configure and test PID parameters for left_wheel_steering_joint
-  pid = gz::math::PID();  // Reset PID
+  pid = control_toolbox::Pid();  // Reset PID
   pid_helper.configure_position_pid(
     left_steering_joint.name,
     left_steering_joint,
@@ -267,7 +332,8 @@ TEST_F(TestGzSystem, TestAckermannDriveConfiguration)
     10.0,   // dummy_p_pos
     10.0    // max_velocity
   );
-  EXPECT_DOUBLE_EQ(pid.PGain(), 1000.0);
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+  EXPECT_DOUBLE_EQ(p, 1000.0);
 }
 
 // Test interaction with global gz_ros_control parameters
@@ -286,13 +352,13 @@ TEST_F(TestGzSystem, TestGlobalParameters)
     "test_joint",
     {"position"},
     {"position"},
-    {}  // No PID parameters specified
+    std::unordered_map<std::string, std::string>{}  // No PID parameters specified
   );
 
   // Create PID helper and test vectors
-  PidConfigHelper pid_helper;
+  JointPosVelPidHelper pid_helper;
   std::vector<rclcpp::Parameter> parameters;
-  gz::math::PID pid;
+  control_toolbox::Pid pid;
 
   // Default values - the position_proportional_gain would be used if no p_pos is specified
   double dummy_p_pos = 10.0;  // This would be calculated from joint limits
@@ -309,13 +375,16 @@ TEST_F(TestGzSystem, TestGlobalParameters)
   );
 
   // Without global parameter influence, PGain would be dummy_p_pos
-  EXPECT_DOUBLE_EQ(pid.PGain(), dummy_p_pos);
+  double p, i, d, i_max, i_min;
+  bool antiwindup;
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+  EXPECT_DOUBLE_EQ(p, dummy_p_pos);
 
   // Test the force calculation with global parameter values
   rclcpp::Duration period = rclcpp::Duration::from_seconds(0.1);
 
   // Calculate with a position error of 1.0
-  double target_force = PidConfigHelper::calculate_position_target_force(
+  double target_force = JointPosVelPidHelper::calculate_position_target_force(
     pid,
     pid,  // Using same PID for position and velocity for simplicity
     2.0,  // current position
@@ -339,7 +408,7 @@ TEST_F(TestGzSystem, TestGlobalParameters)
     "velocity_joint",
     {"velocity"},
     {"velocity", "position"},
-    {}  // No PID parameters specified
+    std::unordered_map<std::string, std::string>{}  // No PID parameters specified
   );
 
   // When hold_joints is false, force should be 0 when no control modes are active
@@ -359,13 +428,13 @@ TEST_F(TestGzSystem, TestParameterPrecedence)
     "test_joint",
     {"position"},
     {"position"},
-    {{"p_pos", "20.0"}}  // Explicitly set p_pos
+    std::unordered_map<std::string, std::string>{{"p_pos", "20.0"}}  // Explicitly set p_pos
   );
 
   // Create PID helper and test vectors
-  PidConfigHelper pid_helper;
+  JointPosVelPidHelper pid_helper;
   std::vector<rclcpp::Parameter> parameters;
-  gz::math::PID pid;
+  control_toolbox::Pid pid;
 
   // Configure position PID
   pid_helper.configure_position_pid(
@@ -378,18 +447,21 @@ TEST_F(TestGzSystem, TestParameterPrecedence)
   );
 
   // Joint-specific parameter should take precedence
-  EXPECT_DOUBLE_EQ(pid.PGain(), 20.0);  // Should use joint's p_pos, not global
+  double p, i, d, i_max, i_min;
+  bool antiwindup;
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+  EXPECT_DOUBLE_EQ(p, 20.0);  // Should use joint's p_pos, not global
 
   // Now test with a joint that doesn't specify p_pos
   auto default_joint_info = create_component_info(
     "default_joint",
     {"position"},
     {"position"},
-    {}  // No PID parameters
+    std::unordered_map<std::string, std::string>{}  // No PID parameters
   );
 
   // Reset PID
-  pid = gz::math::PID();
+  pid = control_toolbox::Pid();
 
   // When joint doesn't specify p_pos, the global parameter or fallback should be used
   pid_helper.configure_position_pid(
@@ -403,7 +475,8 @@ TEST_F(TestGzSystem, TestParameterPrecedence)
 
   // Should fall back to dummy_p_pos since we don't have the global param
   // in the actual system implementation
-  EXPECT_DOUBLE_EQ(pid.PGain(), 10.0);
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+  EXPECT_DOUBLE_EQ(p, 10.0);
 }
 
 // Test XML with combined global and joint-specific parameters
@@ -447,9 +520,9 @@ TEST_F(TestGzSystem, TestCombinedParameters)
   ASSERT_EQ(hardware_info[0].joints.size(), 3u);
 
   // Create PID helper for testing
-  PidConfigHelper pid_helper;
+  JointPosVelPidHelper pid_helper;
   std::vector<rclcpp::Parameter> parameters;
-  gz::math::PID pid;
+  control_toolbox::Pid pid;
 
   // Test joint with specific parameters
   auto & specific_joint = hardware_info[0].joints[0];
@@ -466,8 +539,11 @@ TEST_F(TestGzSystem, TestCombinedParameters)
   );
 
   // Should use joint-specific value
-  EXPECT_DOUBLE_EQ(pid.PGain(), 1000.0);
-  EXPECT_DOUBLE_EQ(pid.IGain(), 10.0);  // From joint param
+  double p, i, d, i_max, i_min;
+  bool antiwindup;
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+  EXPECT_DOUBLE_EQ(p, 1000.0);
+  EXPECT_DOUBLE_EQ(i, 10.0);  // From joint param
 
   // Test joint without specific parameters
   auto & default_joint = hardware_info[0].joints[1];
@@ -475,7 +551,7 @@ TEST_F(TestGzSystem, TestCombinedParameters)
   EXPECT_TRUE(default_joint.parameters.empty());
 
   // Reset PID
-  pid = gz::math::PID();
+  pid = control_toolbox::Pid();
 
   pid_helper.configure_position_pid(
     default_joint.name,
@@ -488,7 +564,8 @@ TEST_F(TestGzSystem, TestCombinedParameters)
 
   // Without a direct link to the global parameter system,
   // the test will use the dummy_p_pos
-  EXPECT_DOUBLE_EQ(pid.PGain(), 10.0);  // Will use dummy_p_pos
+  pid.get_gains(p, i, d, i_max, i_min, antiwindup);
+  EXPECT_DOUBLE_EQ(p, 10.0);  // Will use dummy_p_pos
 }
 
 }  // namespace gz_ros2_control
@@ -496,5 +573,15 @@ TEST_F(TestGzSystem, TestCombinedParameters)
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+
+  // Initialize ROS
+  rclcpp::init(argc, argv);
+
+  // Run tests
+  int result = RUN_ALL_TESTS();
+
+  // Shutdown ROS
+  rclcpp::shutdown();
+
+  return result;
 }

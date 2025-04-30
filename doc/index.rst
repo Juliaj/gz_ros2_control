@@ -143,6 +143,85 @@ To use ``mimic`` joints in *gz_ros2_control* you should define its parameters in
 
 The mimic joint must not have command interfaces configured in the ``<ros2_control>`` tag, but state interfaces can be configured.
 
+Using PID control joints
+-----------------------------------------------------------
+
+To use PID control joints in gz_ros2_control, you should define their parameters inside the ``<joint>`` tag
+within the ``<ros2_control>`` tag. These PID joints can be controlled either in position or velocity.
+
+- To control a joint with velocity PID, simply set its ``command_interface`` to ``velocity_pid``.
+- To control a joint with position PID, set its ``command_interface`` to ``position_pid``.
+
+.. note::
+    You cannot have both command interfaces set to position and position_pid for the same joint. The same restriction applies to velocity (and velocity_pid).
+
+To create a system with one joint that can be controlled using both position_pid and velocity_pid, follow this example:
+
+.. code-block:: xml
+
+ <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    <joint name="slider_to_cart">
+
+      <param name="p_pos">10</param>
+      <param name="i_pos">1</param>
+      <param name="d_pos">2</param>
+      <param name="i_pos_max">10000</param>
+
+      <param name="p_vel">10</param>
+      <param name="i_vel">5</param>
+      <param name="d_vel">2</param>
+      <param name="i_vel_max">10000</param>
+
+      <command_interface name="position_pid"/>
+      <command_interface name="velocity_pid"/>
+
+      <state_interface name="position">
+        <param name="initial_value">1.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+  </ros2_control>
+
+Where the parameters are as follows:
+
+- ``p_pos``: Proportional gain
+- ``i_pos``: Integral gain
+- ``d_pos``: Derivative gain
+- ``i_pos_max``: Maximum summation of the error
+- ``i_pos_min``: Minimum summation of the error
+- ``cmd_pos_max``: Maximum command value
+- ``cmd_pos_min``: Minimum command value
+- ``cmd_pos_forward_gain``: Forward gain for the command which is added to the result of the PID controller.
+
+The same definitions apply to the ``vel_*`` parameters.
+
+The PID parameters can be defined for ``position`` or ``position_pid`` and ``velocity`` or ``velocity_pid`` command interfaces as explained above, or defining them in a YAML file and loading it in the ``gazebo_ros2_control`` plugin as below:
+
+.. code-block:: yaml
+
+  gz_ros2_control:
+    ros__parameters:
+      pid_gains:
+        position_pid: # (or) position
+          slider_to_cart: {p_pos:  100.0, d_pos: 10.0, i_pos:  1.0, i_pos_max: 10000.0}
+
+.. code-block:: xml
+
+  <gazebo>
+    <plugin filename="libgz_ros2_control.so" name="gz_ros2_control">
+      ...
+      <ros>
+        <argument>--ros-args</argument>
+        <argument>--params-file</argument>
+        <argument>Path to the configuration file</argument>
+      </ros>
+    </plugin>
+  </gazebo>
+
 
 Add the gz_ros2_control plugin
 ==========================================
