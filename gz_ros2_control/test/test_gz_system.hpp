@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GZ_ROS2_CONTROL__TEST_GZ_SYSTEM_HPP_
-#define GZ_ROS2_CONTROL__TEST_GZ_SYSTEM_HPP_
+#ifndef TEST_GZ_SYSTEM_HPP_
+#define TEST_GZ_SYSTEM_HPP_
 
 #include <gtest/gtest.h>
 
@@ -76,4 +76,4 @@ hardware_interface::ComponentInfo create_component_info(
   return component_info;
 }
 
-#endif  // GZ_ROS2_CONTROL__TEST_GZ_SYSTEM_HPP_
+#endif  // TEST_GZ_SYSTEM_HPP_

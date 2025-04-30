@@ -24,7 +24,7 @@
 #include <hardware_interface/hardware_info.hpp>
 #include <rclcpp/rclcpp.hpp>
 
-using namespace gz_ros2_control;
+using gz_ros2_control::PidConfigHelper;
 
 // Fix std::clamp issue
 template<class T>

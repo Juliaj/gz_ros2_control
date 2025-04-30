@@ -286,7 +286,7 @@ TEST_F(TestGzSystem, TestGlobalParameters)
     "test_joint",
     {"position"},
     {"position"},
-    {} // No PID parameters specified
+    {}  // No PID parameters specified
   );
 
   // Create PID helper and test vectors
@@ -317,14 +317,14 @@ TEST_F(TestGzSystem, TestGlobalParameters)
   // Calculate with a position error of 1.0
   double target_force = PidConfigHelper::calculate_position_target_force(
     pid,
-    pid, // Using same PID for position and velocity for simplicity
+    pid,  // Using same PID for position and velocity for simplicity
     2.0,  // current position
     1.0,  // target position
     0.0,  // current velocity
-    -10.0, // lower limit
+    -10.0,  // lower limit
     10.0,  // upper limit
     max_velocity,
-    false, // no cascade
+    false,  // no cascade
     period
   );
 
@@ -339,7 +339,7 @@ TEST_F(TestGzSystem, TestGlobalParameters)
     "velocity_joint",
     {"velocity"},
     {"velocity", "position"},
-    {} // No PID parameters specified
+    {}  // No PID parameters specified
   );
 
   // When hold_joints is false, force should be 0 when no control modes are active
@@ -359,7 +359,7 @@ TEST_F(TestGzSystem, TestParameterPrecedence)
     "test_joint",
     {"position"},
     {"position"},
-    {{"p_pos", "20.0"}} // Explicitly set p_pos
+    {{"p_pos", "20.0"}}  // Explicitly set p_pos
   );
 
   // Create PID helper and test vectors
@@ -385,7 +385,7 @@ TEST_F(TestGzSystem, TestParameterPrecedence)
     "default_joint",
     {"position"},
     {"position"},
-    {} // No PID parameters
+    {}  // No PID parameters
   );
 
   // Reset PID
