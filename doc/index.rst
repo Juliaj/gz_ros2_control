@@ -449,3 +449,17 @@ Observation
 The cart does move.
 
 
+Pedulum repro: 
+
+Behavior is different than gazebo default.
+
+.. code-block:: shell
+
+  ros2 launch gz_ros2_control_demos pendulum_example_position_repro.launch.py
+
+  ros2 topic pub -1 /position_controller/commands std_msgs/msg/Float64MultiArray "{data: [-0.1]}"
+
+  ros2 topic pub -1 /position_controller/commands std_msgs/msg/Float64MultiArray "{data: [0.1]}"
+
+  ros2 topic pub -1 /position_controller/commands std_msgs/msg/Float64MultiArray "{data: [0.0]}"
+

@@ -27,7 +27,7 @@ install(DIRECTORY
   config
   sdf
   urdf
-  DESTINATION share/${PROJECT_NAME}/
+  DESTINATION share/${PROJECT_NAME}
 )
 
 add_executable(example_position examples/example_position.cpp)
