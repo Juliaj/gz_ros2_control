@@ -77,6 +77,12 @@ ament_target_dependencies(example_gripper
   std_msgs
 )
 
+add_executable(example_velocity_old examples/example_velocity_old.cpp)
+ament_target_dependencies(example_velocity_old
+  rclcpp
+  std_msgs
+) 
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
 
@@ -88,6 +94,7 @@ install(
   TARGETS
     example_position
     example_velocity
+    example_velocity_old
     example_effort
     example_diff_drive
     example_tricycle_drive

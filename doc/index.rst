@@ -424,3 +424,28 @@ This uses the effort command interface for the cart's degree of freedom on the r
 
   ros2 launch gz_ros2_control_demos pendulum_example_position.launch.py
   ros2 run gz_ros2_control_demos example_position
+
+
+Reproduce the velocity controller example
+-----------------------------------------------------------
+
+.. code-block:: shell
+
+  # start the gz sim
+  ros2 launch gz_ros2_control_demos cart_example_velocity.launch_old.py
+
+  # publish the velocity command
+
+  ros2 topic pub -1 /velocity_controller/commands std_msgs/msg/Float64MultiArray "{data: [-0.1]}"
+
+  ros2 topic pub -1 /velocity_controller/commands std_msgs/msg/Float64MultiArray "{data: [0.1]}"
+
+  ros2 topic pub -1 /velocity_controller/commands std_msgs/msg/Float64MultiArray "{data: [0.0]}"
+
+
+Observation
+-----------------------------------------------------------
+
+The cart does move.
+
+
